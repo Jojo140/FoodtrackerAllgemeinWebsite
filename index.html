@@ -12,7 +12,7 @@
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
     }
     .cross-box {
-      transition: all 0.15s ease-in-out;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
   </style>
 </head>
@@ -49,6 +49,54 @@
         </button>
       </form>
       <p id="sync-mode-hint" class="text-center text-xs text-slate-500 mt-5"></p>
+    </div>
+  </div>
+
+  <!-- MODAL: RÜCKFRAGE FÜR EINHEIT / PORTIONIERUNG BEIM IMPORT -->
+  <div id="unit-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <h3 class="text-base font-bold text-blue-400">⚖️ Wie möchtest du dieses Produkt einteilen?</h3>
+      <p id="unit-modal-product-name" class="text-sm text-slate-200 font-semibold"></p>
+      <p class="text-xs text-slate-400">
+        Wähle aus, ob du dieses Lebensmittel <strong>grammgenau</strong> abwiegen/abziehen möchtest oder ob es in <strong>ganzen Stücken / Packungen</strong> (One-Go) verbraucht wird.
+      </p>
+
+      <div class="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onclick="setModalUnitMode('g')"
+          id="modal-btn-g"
+          class="p-3 rounded-xl border border-blue-500 bg-blue-500/15 text-blue-300 text-xs font-semibold text-left"
+        >
+          <div class="text-sm font-bold mb-0.5">⚖️ In Gramm (g)</div>
+          <div class="text-slate-400 font-normal">Nährwerte pro 100g, frei in Gramm abziehbar</div>
+        </button>
+        <button
+          type="button"
+          onclick="setModalUnitMode('Stk')"
+          id="modal-btn-stk"
+          class="p-3 rounded-xl border border-slate-700 bg-slate-950 text-slate-300 text-xs font-semibold text-left"
+        >
+          <div class="text-sm font-bold mb-0.5">📦 Stück / Packung</div>
+          <div class="text-slate-400 font-normal">Geht einzeln oder als Packung weg</div>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <div>
+          <label id="modal-qty-label" class="block text-xs text-slate-400 mb-1">Aktueller Vorrat (in g)</label>
+          <input type="number" id="modal-start-qty" value="400" min="0" step="any" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100" />
+        </div>
+        <div>
+          <label id="modal-pack-label" class="block text-xs text-slate-400 mb-1">1 Packung beim Einkauf = (g)</label>
+          <input type="number" id="modal-pack-size" value="400" min="1" step="any" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+        <button onclick="closeUnitModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">Abbrechen</button>
+        <button onclick="confirmUnitModalImport()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold">Speichern</button>
+      </div>
     </div>
   </div>
 
@@ -97,13 +145,13 @@
           <span class="text-xs bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2.5 py-0.5 rounded-full">Strikter Modus</span>
         </div>
         <p class="text-xs text-slate-400 mb-3">
-          Manuelle Eingaben sind gesperrt. Frage Gemini nach den Nährwerten und füge den Code beginnend mit <code class="text-slate-200 bg-slate-950 px-1.5 py-0.5 rounded">GEMINI-FOOD::</code> hier ein:
+          Manuelle Nährwerteingaben sind gesperrt. Füge einen <code class="text-slate-200 bg-slate-950 px-1.5 py-0.5 rounded">GEMINI-FOOD::</code> Code ein. Ist im Code keine feste Einheit (<code class="text-slate-300">g</code> oder <code class="text-slate-300">Stk</code>) definiert, fragt dich die App automatisch nach deiner gewünschten Einteilung.
         </p>
         <div class="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             id="gemini-code-input"
-            placeholder='GEMINI-FOOD::{"name":"Haferflocken (100g)","qty":2,"kcal":372,...}'
+            placeholder='GEMINI-FOOD::{"name":"K-Classic Gratinkäse","unit":"g","base":100,"packSize":200,"qty":200,"kcal":350,...}'
             class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-mono text-slate-100 focus:outline-none focus:border-blue-500"
           />
           <button
@@ -123,23 +171,54 @@
       </div>
     </section>
 
-    <!-- TAB 2: ESSENSPLANER & BEWERTUNG -->
+    <!-- TAB 2: ESSENSPLANER, 7-TAGE-GRAPH & BEWERTUNG -->
     <section id="tab-meals" class="hidden space-y-6">
+      <!-- 7-DAY HEALTH AVERAGE & GRAPH -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-base font-semibold">📊 7-Tage-Durchschnitt & Ernährungs-Graph</h2>
+            <p class="text-xs text-slate-400">Auswertung aller gespeicherten Mahlzeiten der letzten 7 Tage</p>
+          </div>
+          <div id="seven-day-avg-badge" class="px-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-sm font-bold">
+            Ø Noch keine Daten
+          </div>
+        </div>
+
+        <!-- 7-Day Bar Chart -->
+        <div id="seven-day-chart" class="grid grid-cols-7 gap-2 items-end h-40 pt-6 pb-2 px-2 bg-slate-950 border border-slate-800 rounded-xl"></div>
+
+        <!-- Distribution Bar (Gesund / Mittel / Ungesund) -->
+        <div class="mt-4 space-y-1.5">
+          <div class="flex justify-between text-xs text-slate-400">
+            <span id="dist-healthy-txt">🟢 Gesund: 0</span>
+            <span id="dist-medium-txt">🟡 Mittel: 0</span>
+            <span id="dist-unhealthy-txt">🔴 Ungesund: 0</span>
+          </div>
+          <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800">
+            <div id="dist-healthy-bar" class="bg-emerald-500 h-full transition-all" style="width: 0%"></div>
+            <div id="dist-medium-bar" class="bg-amber-400 h-full transition-all" style="width: 0%"></div>
+            <div id="dist-unhealthy-bar" class="bg-rose-500 h-full transition-all" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MEAL BUILDER -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <h2 class="text-base font-semibold mb-1">Mahlzeit zusammenstellen</h2>
         <p class="text-xs text-slate-400 mb-4">
-          Kombiniere deine gespeicherten Lebensmittel. Alle Nährwerte (Kalorien, Protein, Kohlenhydrate, Zucker, Fett, gesättigte Fette & Ballaststoffe) fließen in die Bewertung ein.
+          Wähle ein Lebensmittel. Je nach Produkt gibst du die Menge direkt in <strong>Gramm (g)</strong> oder als <strong>Stück/Packung</strong> an.
         </p>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <div class="sm:col-span-2">
             <label class="block text-xs text-slate-400 mb-1">Lebensmittel aus deiner Liste</label>
-            <select id="meal-food-select" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100"></select>
+            <select id="meal-food-select" onchange="updateMealInputUnitHint()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100"></select>
           </div>
           <div>
-            <label class="block text-xs text-slate-400 mb-1">Portionen / Faktor</label>
+            <label id="meal-amount-label" class="block text-xs text-slate-400 mb-1">Menge</label>
             <div class="flex gap-2">
-              <input type="number" id="meal-food-portions" value="1" min="0.25" step="0.25" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100" />
+              <input type="number" id="meal-food-amount" value="1" min="0.1" step="any" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100" />
               <button onclick="addIngredientToMealBuilder()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 rounded-xl text-sm shrink-0">
                 + Add
               </button>
@@ -171,7 +250,7 @@
           </div>
 
           <div class="flex flex-col sm:flex-row gap-2 mt-4">
-            <input type="text" id="meal-name-input" placeholder="Name der Mahlzeit (z. B. Power-Frühstück)" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100" />
+            <input type="text" id="meal-name-input" placeholder="Name der Mahlzeit (z. B. Abendessen)" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100" />
             <button onclick="saveMeal(false)" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl text-sm font-medium transition">
               Nur speichern
             </button>
@@ -194,7 +273,7 @@
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <h2 class="text-base font-semibold mb-1">Automatische Einkaufsliste</h2>
         <p class="text-xs text-slate-400 mb-4">
-          Hier erscheinen ausschließlich Lebensmittel, deren Vorrat daheim auf <strong>0</strong> gefallen ist und bei denen du <em>„Wieder einkaufen?“</em> geklickt hast.
+          Hier landen Produkte, deren Vorrat auf <strong>0</strong> gefallen ist. Du kannst jetzt vor dem Abhaken die <strong>gekaufte Anzahl an Packungen/Stücken</strong> einstellen.
         </p>
         <div id="shopping-list" class="space-y-2.5"></div>
       </div>
@@ -207,7 +286,7 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
           <!-- Hours Input -->
-          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
             <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
               Wie viele Stunden warst du im Gym?
             </label>
@@ -218,23 +297,23 @@
               min="0.25"
               max="10"
               step="0.25"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-lg font-bold text-slate-100 focus:outline-none focus:border-blue-500"
+              class="w-full h-12 bg-slate-900 border border-slate-700 rounded-xl px-4 text-lg font-bold text-slate-100 focus:outline-none focus:border-blue-500"
             />
           </div>
 
-          <!-- Interactive Yes / No Cross Field for Post-Stretching -->
-          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+          <!-- Interactive Yes / No Cross Field for Post-Stretching (FIXED ALIGNMENT) -->
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
             <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
               Post-Stretching gemacht?
             </label>
-            <div class="grid grid-cols-2 gap-3 mt-1">
+            <div class="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onclick="selectStretch(true)"
                 id="stretch-yes-btn"
-                class="cross-box flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-slate-700 bg-slate-900 text-sm font-semibold"
+                class="cross-box h-12 flex items-center justify-center gap-2.5 px-4 rounded-xl border text-sm font-semibold whitespace-nowrap"
               >
-                <span id="stretch-yes-box" class="w-6 h-6 flex items-center justify-center rounded border border-slate-600 font-mono text-base">[ ]</span>
+                <span id="stretch-yes-box" class="w-7 h-7 shrink-0 flex items-center justify-center rounded border border-current font-mono text-xs whitespace-nowrap">[X]</span>
                 <span>Ja</span>
               </button>
 
@@ -242,9 +321,9 @@
                 type="button"
                 onclick="selectStretch(false)"
                 id="stretch-no-btn"
-                class="cross-box flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-slate-700 bg-slate-900 text-sm font-semibold"
+                class="cross-box h-12 flex items-center justify-center gap-2.5 px-4 rounded-xl border text-sm font-semibold whitespace-nowrap"
               >
-                <span id="stretch-no-box" class="w-6 h-6 flex items-center justify-center rounded border border-slate-600 font-mono text-base">[ ]</span>
+                <span id="stretch-no-box" class="w-7 h-7 shrink-0 flex items-center justify-center rounded border border-current font-mono text-xs whitespace-nowrap">[&nbsp;]</span>
                 <span>Nein</span>
               </button>
             </div>
@@ -277,9 +356,7 @@
     import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // ============================================================================
-    // 1. FIREBASE KONFIGURATION (Für Laptop <-> Handy Echtzeit-Sync)
-    // Ersetze die Platzhalter durch deine Firebase-Projektdaten.
-    // Solange "DEIN_API_KEY" hier steht, läuft die App zum Testen im Local-Modus.
+    // 1. FIREBASE KONFIGURATION
     // ============================================================================
     const firebaseConfig = {
       apiKey: "AIzaSyCGEtLAkxtHTrgo9x2JB8aDCScWmMzJ1ac",
@@ -287,21 +364,18 @@
       projectId: "foodtrackerfujo",
       storageBucket: "foodtrackerfujo.firebasestorage.app",
       messagingSenderId: "240216640702",
-      appId: "1:240216640702:web:32509b396616e777f9a2ef"
+      appId: "1:240216640702:web:32509b396616e777f9a2ef",
+      measurementId: "G-0NBC5ZFPST"
     };
 
-    // Feste Login-E-Mail im Hintergrund, damit du im UI NUR dein Passwort eingeben musst:
     const FIXED_AUTH_EMAIL = "tracker@meine-app.local";
-    // Fallback-Passwort für den lokalen Testmodus (bevor Firebase verbunden ist):
     const LOCAL_DEMO_PASSWORD = "admin123";
-
     const isFirebaseConfigured = firebaseConfig.apiKey !== "DEIN_API_KEY";
 
     let auth = null;
     let db = null;
     let currentUser = null;
 
-    // Zentraler App-State
     let state = {
       pantry: [],
       shoppingList: [],
@@ -311,6 +385,8 @@
 
     let currentMealBuilder = [];
     let selectedStretchValue = true;
+    let pendingImportItem = null;
+    let modalUnitMode = "g";
 
     const syncHintEl = document.getElementById("sync-mode-hint");
     if (isFirebaseConfigured) {
@@ -325,7 +401,7 @@
     }
 
     // ============================================================================
-    // 2. AUTHENTIFIZIERUNG & DATEN-SYNCHRONISATION
+    // 2. AUTHENTIFIZIERUNG & SYNC
     // ============================================================================
     const loginScreen = document.getElementById("login-screen");
     const appScreen = document.getElementById("app-screen");
@@ -390,13 +466,22 @@
       }
     });
 
+    function normalizePantryItems(items) {
+      return (items || []).map((item) => ({
+        ...item,
+        unit: item.unit || "Stk",
+        base: Number(item.base) || 1,
+        packSize: Number(item.packSize) || (item.unit === "g" ? 100 : 1)
+      }));
+    }
+
     function subscribeToCloudData(uid) {
       const ref = doc(db, "users", uid);
       onSnapshot(ref, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
           state = {
-            pantry: data.pantry || [],
+            pantry: normalizePantryItems(data.pantry),
             shoppingList: data.shoppingList || [],
             savedMeals: data.savedMeals || [],
             gymLogs: data.gymLogs || []
@@ -420,7 +505,13 @@
       const raw = localStorage.getItem("food_gym_hub_state");
       if (raw) {
         try {
-          state = JSON.parse(raw);
+          const parsed = JSON.parse(raw);
+          state = {
+            pantry: normalizePantryItems(parsed.pantry),
+            shoppingList: parsed.shoppingList || [],
+            savedMeals: parsed.savedMeals || [],
+            gymLogs: parsed.gymLogs || []
+          };
         } catch (e) {}
       }
       renderAll();
@@ -437,7 +528,7 @@
     };
 
     // ============================================================================
-    // 4. GEMINI-FOOD-PARSER & VORRAT
+    // 4. GEMINI-FOOD-PARSER, RÜCKFRAGE-MODAL & VORRAT
     // ============================================================================
     window.importGeminiFood = function() {
       const inputEl = document.getElementById("gemini-code-input");
@@ -447,7 +538,7 @@
       feedbackEl.classList.remove("hidden", "text-emerald-400", "text-rose-400");
 
       if (!raw.startsWith("GEMINI-FOOD::")) {
-        feedbackEl.textContent = "❌ Ungültiges Format! Der Code muss von Gemini stammen und mit 'GEMINI-FOOD::' beginnen.";
+        feedbackEl.textContent = "❌ Ungültiges Format! Der Code muss mit 'GEMINI-FOOD::' beginnen.";
         feedbackEl.classList.add("text-rose-400");
         return;
       }
@@ -459,17 +550,22 @@
         const requiredKeys = ["name", "qty", "kcal", "protein", "carbs", "sugar", "fat", "satFat", "fiber"];
         for (const k of requiredKeys) {
           if (item[k] === undefined || item[k] === null || (k !== "name" && isNaN(Number(item[k])))) {
-            throw new Error(`Feld ${k} fehlt oder ist ungültig.`);
+            throw new Error(`Feld ${k} fehlt.`);
           }
         }
 
-        const existingIndex = state.pantry.findIndex(
-          (p) => p.name.toLowerCase() === String(item.name).toLowerCase()
-        );
+        // Wenn im Code noch keine Einheit ("unit": "g" oder "Stk") definiert wurde -> Rückfrage-Modal öffnen!
+        if (!item.unit) {
+          pendingImportItem = item;
+          openUnitModal(item);
+          return;
+        }
 
-        const cleanItem = {
-          id: existingIndex >= 0 ? state.pantry[existingIndex].id : "food_" + Date.now(),
+        finalizeFoodImport({
           name: String(item.name),
+          unit: item.unit === "g" ? "g" : "Stk",
+          base: Number(item.base) || (item.unit === "g" ? 100 : 1),
+          packSize: Number(item.packSize) || Number(item.qty) || (item.unit === "g" ? 100 : 1),
           qty: Math.max(0, Number(item.qty)),
           kcal: Number(item.kcal),
           protein: Number(item.protein),
@@ -478,28 +574,103 @@
           fat: Number(item.fat),
           satFat: Number(item.satFat),
           fiber: Number(item.fiber)
-        };
-
-        if (existingIndex >= 0) {
-          state.pantry[existingIndex] = cleanItem;
-        } else {
-          state.pantry.push(cleanItem);
-        }
-
-        inputEl.value = "";
-        feedbackEl.textContent = `✅ "${cleanItem.name}" erfolgreich importiert!`;
-        feedbackEl.classList.add("text-emerald-400");
-        persistState();
+        });
       } catch (err) {
         feedbackEl.textContent = "❌ Code konnte nicht gelesen werden. Bitte kopiere den kompletten Gemini-String.";
         feedbackEl.classList.add("text-rose-400");
       }
     };
 
-    window.changePantryQty = function(id, delta) {
+    function openUnitModal(item) {
+      document.getElementById("unit-modal-product-name").textContent = item.name;
+      setModalUnitMode("g");
+      document.getElementById("unit-modal").classList.remove("hidden");
+    }
+
+    window.closeUnitModal = function() {
+      pendingImportItem = null;
+      document.getElementById("unit-modal").classList.add("hidden");
+    };
+
+    window.setModalUnitMode = function(mode) {
+      modalUnitMode = mode;
+      const btnG = document.getElementById("modal-btn-g");
+      const btnStk = document.getElementById("modal-btn-stk");
+      const qtyLabel = document.getElementById("modal-qty-label");
+      const packLabel = document.getElementById("modal-pack-label");
+      const startQtyInput = document.getElementById("modal-start-qty");
+      const packSizeInput = document.getElementById("modal-pack-size");
+
+      if (mode === "g") {
+        btnG.className = "p-3 rounded-xl border border-blue-500 bg-blue-500/15 text-blue-300 text-xs font-semibold text-left";
+        btnStk.className = "p-3 rounded-xl border border-slate-700 bg-slate-950 text-slate-300 text-xs font-semibold text-left";
+        qtyLabel.textContent = "Aktueller Vorrat (in Gramm)";
+        packLabel.textContent = "1 Packung beim Einkauf = (Gramm)";
+        startQtyInput.value = 250;
+        packSizeInput.value = 250;
+      } else {
+        btnStk.className = "p-3 rounded-xl border border-blue-500 bg-blue-500/15 text-blue-300 text-xs font-semibold text-left";
+        btnG.className = "p-3 rounded-xl border border-slate-700 bg-slate-950 text-slate-300 text-xs font-semibold text-left";
+        qtyLabel.textContent = "Aktueller Vorrat (Stück / Packungen)";
+        packLabel.textContent = "1 Einkaufseinheit = (Stück)";
+        startQtyInput.value = pendingImportItem ? Number(pendingImportItem.qty) || 1 : 1;
+        packSizeInput.value = 1;
+      }
+    };
+
+    window.confirmUnitModalImport = function() {
+      if (!pendingImportItem) return;
+      const startQty = Math.max(0, Number(document.getElementById("modal-start-qty").value) || 0);
+      const packSize = Math.max(1, Number(document.getElementById("modal-pack-size").value) || 1);
+
+      finalizeFoodImport({
+        name: String(pendingImportItem.name),
+        unit: modalUnitMode,
+        base: modalUnitMode === "g" ? 100 : 1,
+        packSize: packSize,
+        qty: startQty,
+        kcal: Number(pendingImportItem.kcal),
+        protein: Number(pendingImportItem.protein),
+        carbs: Number(pendingImportItem.carbs),
+        sugar: Number(pendingImportItem.sugar),
+        fat: Number(pendingImportItem.fat),
+        satFat: Number(pendingImportItem.satFat),
+        fiber: Number(pendingImportItem.fiber)
+      });
+      closeUnitModal();
+    };
+
+    function finalizeFoodImport(cleanItem) {
+      const inputEl = document.getElementById("gemini-code-input");
+      const feedbackEl = document.getElementById("import-feedback");
+
+      const existingIndex = state.pantry.findIndex(
+        (p) => p.name.toLowerCase() === cleanItem.name.toLowerCase()
+      );
+
+      cleanItem.id = existingIndex >= 0 ? state.pantry[existingIndex].id : "food_" + Date.now();
+
+      if (existingIndex >= 0) {
+        state.pantry[existingIndex] = cleanItem;
+      } else {
+        state.pantry.push(cleanItem);
+      }
+
+      inputEl.value = "";
+      feedbackEl.classList.remove("hidden", "text-rose-400");
+      feedbackEl.textContent = `✅ "${cleanItem.name}" (${cleanItem.qty} ${cleanItem.unit}) erfolgreich importiert!`;
+      feedbackEl.classList.add("text-emerald-400");
+      persistState();
+    }
+
+    window.changePantryQtyCustom = function(id, direction) {
       const item = state.pantry.find((p) => p.id === id);
       if (!item) return;
-      item.qty = Math.max(0, Number((item.qty + delta).toFixed(2)));
+      const stepInput = document.getElementById(`step-${id}`);
+      const delta = stepInput ? Number(stepInput.value) : (item.unit === "g" ? 50 : 1);
+      if (isNaN(delta) || delta <= 0) return;
+
+      item.qty = Math.max(0, Number((item.qty + direction * delta).toFixed(2)));
       persistState();
     };
 
@@ -511,6 +682,7 @@
         state.shoppingList.push({
           foodId: item.id,
           name: item.name,
+          buyCount: 1,
           addedAt: new Date().toLocaleDateString("de-DE")
         });
       }
@@ -524,23 +696,48 @@
     };
 
     // ============================================================================
-    // 5. EINKAUFSLISTE (Automatisch über Vorrat = 0)
+    // 5. EINKAUFSLISTE MIT FREIER ANZAHL GEKAUFTER PACKUNGEN
     // ============================================================================
     window.markAsBought = function(foodId) {
+      const countInput = document.getElementById(`buy-qty-${foodId}`);
+      const boughtPacks = countInput ? Math.max(1, Number(countInput.value) || 1) : 1;
+
       const pantryItem = state.pantry.find((p) => p.id === foodId);
       if (pantryItem) {
-        pantryItem.qty += 1;
+        const addAmount = boughtPacks * (Number(pantryItem.packSize) || 1);
+        pantryItem.qty = Number((pantryItem.qty + addAmount).toFixed(2));
       }
       state.shoppingList = state.shoppingList.filter((s) => s.foodId !== foodId);
       persistState();
     };
 
     // ============================================================================
-    // 6. ESSENSPLANER & GESUNDHEITS-ALGORITHMUS (Alle 7 Nährwerte)
+    // 6. ESSENSPLANER, PORTIONIERUNG & 7-TAGE-GRAPH
     // ============================================================================
+    window.updateMealInputUnitHint = function() {
+      const selectEl = document.getElementById("meal-food-select");
+      const labelEl = document.getElementById("meal-amount-label");
+      const amountInput = document.getElementById("meal-food-amount");
+      const food = state.pantry.find((p) => p.id === selectEl.value);
+
+      if (!food) {
+        labelEl.textContent = "Menge";
+        return;
+      }
+      if (food.unit === "g") {
+        labelEl.textContent = `Menge in Gramm (Vorrat: ${food.qty}g)`;
+        amountInput.value = food.base || 100;
+        amountInput.step = 10;
+      } else {
+        labelEl.textContent = `Anzahl in Stück/Packung (Vorrat: ${food.qty})`;
+        amountInput.value = 1;
+        amountInput.step = 0.5;
+      }
+    };
+
     function evaluateMealHealth(totals) {
       if (totals.kcal <= 0) {
-        return { label: "Neutral", color: "text-slate-400", reasons: "Keine Kalorien enthalten." };
+        return { score: 50, label: "Neutral", badgeClass: "text-slate-400", reasons: "Keine Kalorien enthalten." };
       }
 
       let score = 60;
@@ -551,7 +748,6 @@
       const sugarCalRatio = (totals.sugar * 4) / totals.kcal;
       const satFatCalRatio = (totals.satFat * 9) / totals.kcal;
 
-      // 1. Protein-Anteil
       if (proteinCalRatio >= 0.22) {
         score += 15;
         notes.push("+ Hoher Proteingehalt");
@@ -562,7 +758,6 @@
         notes.push("- Wenig Protein");
       }
 
-      // 2. Ballaststoffe
       if (totals.fiber >= 8) {
         score += 15;
         notes.push("+ Sehr ballaststoffreich");
@@ -573,7 +768,6 @@
         notes.push("- Kaum Ballaststoffe");
       }
 
-      // 3. Zucker
       if (totals.sugar > 25 || sugarCalRatio > 0.20) {
         score -= 22;
         notes.push("- Hoher Zuckergehalt");
@@ -584,7 +778,6 @@
         notes.push("+ Zuckerarm");
       }
 
-      // 4. Gesättigte Fettsäuren
       if (totals.satFat > 15 || satFatCalRatio > 0.12) {
         score -= 20;
         notes.push("- Viele gesättigte Fette");
@@ -594,30 +787,37 @@
         score += 5;
       }
 
-      // 5. Gesamtfett & Kaloriendichte
       if (fatCalRatio > 0.45) {
         score -= 10;
         notes.push("- Sehr hoher Fettanteil");
       }
       if (totals.kcal > 1050) {
         score -= 10;
-        notes.push("- Sehr hohe Kalorienlast pro Mahlzeit");
+        notes.push("- Sehr hohe Kalorienlast");
       }
+
+      score = Math.max(5, Math.min(100, Math.round(score)));
 
       if (score >= 70) {
         return {
+          score,
+          category: "healthy",
           label: "🟢 Gesund",
           badgeClass: "text-emerald-400",
           reasons: notes.join(" · ") || "Ausgewogene Makro- und Ballaststoffverteilung"
         };
       } else if (score >= 45) {
         return {
+          score,
+          category: "medium",
           label: "🟡 Mittel",
           badgeClass: "text-amber-400",
           reasons: notes.join(" · ") || "Solide Werte mit leichten Abzügen"
         };
       } else {
         return {
+          score,
+          category: "unhealthy",
           label: "🔴 Ungesund",
           badgeClass: "text-rose-400",
           reasons: notes.join(" · ") || "Ungünstiges Verhältnis aus Zucker, Fett und Ballaststoffen"
@@ -627,19 +827,25 @@
 
     window.addIngredientToMealBuilder = function() {
       const selectEl = document.getElementById("meal-food-select");
-      const portionsEl = document.getElementById("meal-food-portions");
+      const amountEl = document.getElementById("meal-food-amount");
       const foodId = selectEl.value;
-      const portions = Number(portionsEl.value);
+      const amount = Number(amountEl.value);
 
-      if (!foodId || portions <= 0) return;
+      if (!foodId || isNaN(amount) || amount <= 0) return;
       const food = state.pantry.find((p) => p.id === foodId);
       if (!food) return;
 
       const existing = currentMealBuilder.find((i) => i.foodId === foodId);
       if (existing) {
-        existing.portions = Number((existing.portions + portions).toFixed(2));
+        existing.amount = Number((existing.amount + amount).toFixed(2));
       } else {
-        currentMealBuilder.push({ foodId: food.id, name: food.name, portions });
+        currentMealBuilder.push({
+          foodId: food.id,
+          name: food.name,
+          amount,
+          unit: food.unit || "Stk",
+          base: Number(food.base) || 1
+        });
       }
       renderMealBuilder();
     };
@@ -654,15 +860,25 @@
       currentMealBuilder.forEach((entry) => {
         const food = state.pantry.find((p) => p.id === entry.foodId);
         if (!food) return;
-        totals.kcal += food.kcal * entry.portions;
-        totals.protein += food.protein * entry.portions;
-        totals.carbs += food.carbs * entry.portions;
-        totals.sugar += food.sugar * entry.portions;
-        totals.fat += food.fat * entry.portions;
-        totals.satFat += food.satFat * entry.portions;
-        totals.fiber += food.fiber * entry.portions;
+        const amountUsed = entry.amount !== undefined ? entry.amount : entry.portions;
+        const factor = amountUsed / (Number(food.base) || 1);
+
+        totals.kcal += food.kcal * factor;
+        totals.protein += food.protein * factor;
+        totals.carbs += food.carbs * factor;
+        totals.sugar += food.sugar * factor;
+        totals.fat += food.fat * factor;
+        totals.satFat += food.satFat * factor;
+        totals.fiber += food.fiber * factor;
       });
       return totals;
+    }
+
+    function getLocalISODate(d = new Date()) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
     }
 
     window.saveMeal = function(deductFromPantry) {
@@ -676,7 +892,7 @@
         currentMealBuilder.forEach((entry) => {
           const food = state.pantry.find((p) => p.id === entry.foodId);
           if (food) {
-            food.qty = Math.max(0, Number((food.qty - entry.portions).toFixed(2)));
+            food.qty = Math.max(0, Number((food.qty - entry.amount).toFixed(2)));
           }
         });
       }
@@ -685,8 +901,12 @@
         id: "meal_" + Date.now(),
         name: mealName,
         date: new Date().toLocaleDateString("de-DE"),
+        isoDate: getLocalISODate(),
+        timestamp: Date.now(),
         items: [...currentMealBuilder],
         totals,
+        score: rating.score,
+        category: rating.category,
         ratingLabel: rating.label,
         ratingClass: rating.badgeClass,
         reasons: rating.reasons
@@ -703,7 +923,7 @@
     };
 
     // ============================================================================
-    // 7. GYM TRACKER (Stunden + Interaktives Ja/Nein Kreuzchen-Feld)
+    // 7. GYM TRACKER (FIXED POST-STRETCHING BUTTONS)
     // ============================================================================
     window.selectStretch = function(val) {
       selectedStretchValue = val;
@@ -713,15 +933,15 @@
       const noBox = document.getElementById("stretch-no-box");
 
       if (val) {
-        yesBtn.className = "cross-box flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-emerald-500 bg-emerald-500/15 text-emerald-300 text-sm font-semibold";
-        yesBox.textContent = "[X]";
-        noBtn.className = "cross-box flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 text-sm font-semibold";
-        noBox.textContent = "[ ]";
+        yesBtn.className = "cross-box h-12 flex items-center justify-center gap-2.5 px-4 rounded-xl border border-emerald-500 bg-emerald-500/15 text-emerald-300 text-sm font-semibold whitespace-nowrap";
+        yesBox.innerHTML = "[X]";
+        noBtn.className = "cross-box h-12 flex items-center justify-center gap-2.5 px-4 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 text-sm font-semibold whitespace-nowrap";
+        noBox.innerHTML = "[&nbsp;]";
       } else {
-        noBtn.className = "cross-box flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-rose-500 bg-rose-500/15 text-rose-300 text-sm font-semibold";
-        noBox.textContent = "[X]";
-        yesBtn.className = "cross-box flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 text-sm font-semibold";
-        yesBox.textContent = "[ ]";
+        noBtn.className = "cross-box h-12 flex items-center justify-center gap-2.5 px-4 rounded-xl border border-rose-500 bg-rose-500/15 text-rose-300 text-sm font-semibold whitespace-nowrap";
+        noBox.innerHTML = "[X]";
+        yesBtn.className = "cross-box h-12 flex items-center justify-center gap-2.5 px-4 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 text-sm font-semibold whitespace-nowrap";
+        yesBox.innerHTML = "[&nbsp;]";
       }
     };
 
@@ -751,10 +971,11 @@
     };
 
     // ============================================================================
-    // 8. RENDERING ALLER TABS
+    // 8. RENDERING ALLER TABS & DES 7-TAGE-GRAPHEN
     // ============================================================================
     function renderAll() {
       renderPantry();
+      renderSevenDayAnalytics();
       renderMealBuilder();
       renderSavedMeals();
       renderShoppingList();
@@ -764,6 +985,7 @@
     function renderPantry() {
       const listEl = document.getElementById("pantry-list");
       const selectEl = document.getElementById("meal-food-select");
+      const prevSelected = selectEl.value;
 
       if (state.pantry.length === 0) {
         listEl.innerHTML = `<p class="text-xs text-slate-500">Noch keine Lebensmittel vorhanden. Füge oben einen Gemini-Code ein.</p>`;
@@ -772,23 +994,34 @@
       }
 
       selectEl.innerHTML = state.pantry
-        .map((item) => `<option value="${item.id}">${item.name} (${item.kcal} kcal)</option>`)
+        .map((item) => {
+          const baseLabel = item.unit === "g" ? `${item.base}g` : `1 Stk`;
+          return `<option value="${item.id}">${item.name} (${item.kcal} kcal / ${baseLabel})</option>`;
+        })
         .join("");
+
+      if (prevSelected && state.pantry.some((p) => p.id === prevSelected)) {
+        selectEl.value = prevSelected;
+      }
+      updateMealInputUnitHint();
 
       listEl.innerHTML = state.pantry
         .map((item) => {
           const isZero = item.qty <= 0;
           const alreadyOnShopping = state.shoppingList.some((s) => s.foodId === item.id);
+          const defaultStep = item.unit === "g" ? 50 : 1;
+          const baseInfo = item.unit === "g" ? `pro ${item.base}g` : `pro Stück/Packung`;
 
           return `
             <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-950 border ${isZero ? "border-amber-500/40" : "border-slate-800"} p-3.5 rounded-xl">
               <div>
-                <div class="font-semibold text-sm flex items-center gap-2">
+                <div class="font-semibold text-sm flex flex-wrap items-center gap-2">
                   <span>${item.name}</span>
+                  <span class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-normal">Vorrat: <strong>${item.qty} ${item.unit}</strong> (1 Pack = ${item.packSize} ${item.unit})</span>
                   ${isZero ? `<span class="text-xs bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full">Leer (0)</span>` : ""}
                 </div>
-                <div class="text-xs text-slate-400 mt-0.5">
-                  ${item.kcal} kcal · P: ${item.protein}g · C: ${item.carbs}g (Zucker: ${item.sugar}g) · F: ${item.fat}g (Ges.: ${item.satFat}g) · Ballastst.: ${item.fiber}g
+                <div class="text-xs text-slate-400 mt-1">
+                  <span class="text-slate-500">[${baseInfo}]</span> ${item.kcal} kcal · P: ${item.protein}g · C: ${item.carbs}g (Zucker: ${item.sugar}g) · F: ${item.fat}g (Ges.: ${item.satFat}g) · Ballastst.: ${item.fiber}g
                 </div>
               </div>
 
@@ -804,13 +1037,114 @@
                 }
 
                 <div class="flex items-center bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-                  <button onclick="changePantryQty('${item.id}', -1)" class="px-2.5 py-1 text-slate-300 hover:bg-slate-800 font-bold">-</button>
-                  <span class="px-3 py-1 text-xs font-bold">${item.qty}</span>
-                  <button onclick="changePantryQty('${item.id}', 1)" class="px-2.5 py-1 text-slate-300 hover:bg-slate-800 font-bold">+</button>
+                  <button onclick="changePantryQtyCustom('${item.id}', -1)" title="Abziehen" class="px-2.5 py-1 text-slate-300 hover:bg-rose-500/20 hover:text-rose-300 font-bold">-</button>
+                  <input
+                    type="number"
+                    id="step-${item.id}"
+                    value="${defaultStep}"
+                    min="0.5"
+                    step="any"
+                    class="w-14 bg-slate-950 text-center text-xs font-bold text-slate-200 py-1 focus:outline-none"
+                    title="Schrittweite in ${item.unit}"
+                  />
+                  <span class="text-[10px] text-slate-500 pr-1.5 bg-slate-950">${item.unit}</span>
+                  <button onclick="changePantryQtyCustom('${item.id}', 1)" title="Hinzufügen" class="px-2.5 py-1 text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-300 font-bold">+</button>
                 </div>
 
                 <button onclick="deletePantryItem('${item.id}')" title="Löschen" class="text-slate-500 hover:text-rose-400 px-1.5 text-sm">✕</button>
               </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    function renderSevenDayAnalytics() {
+      const chartEl = document.getElementById("seven-day-chart");
+      const avgBadgeEl = document.getElementById("seven-day-avg-badge");
+
+      const days = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push({
+          iso: getLocalISODate(d),
+          shortDate: d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit" }),
+          dateDe: d.toLocaleDateString("de-DE"),
+          meals: []
+        });
+      }
+
+      state.savedMeals.forEach((meal) => {
+        const rating = meal.score !== undefined ? { score: meal.score, category: meal.category } : evaluateMealHealth(meal.totals || { kcal: 0 });
+        const enrichedMeal = { ...meal, score: rating.score, category: rating.category };
+
+        const dayObj = days.find((d) => (meal.isoDate && d.iso === meal.isoDate) || d.dateDe === meal.date);
+        if (dayObj) {
+          dayObj.meals.push(enrichedMeal);
+        }
+      });
+
+      let allSevenDayMeals = [];
+      days.forEach((d) => {
+        allSevenDayMeals = allSevenDayMeals.concat(d.meals);
+      });
+
+      const healthyCount = allSevenDayMeals.filter((m) => m.score >= 70).length;
+      const mediumCount = allSevenDayMeals.filter((m) => m.score >= 45 && m.score < 70).length;
+      const unhealthyCount = allSevenDayMeals.filter((m) => m.score < 45).length;
+      const totalCount = allSevenDayMeals.length;
+
+      document.getElementById("dist-healthy-txt").textContent = `🟢 Gesund: ${healthyCount}`;
+      document.getElementById("dist-medium-txt").textContent = `🟡 Mittel: ${mediumCount}`;
+      document.getElementById("dist-unhealthy-txt").textContent = `🔴 Ungesund: ${unhealthyCount}`;
+
+      document.getElementById("dist-healthy-bar").style.width = totalCount ? `${(healthyCount / totalCount) * 100}%` : "0%";
+      document.getElementById("dist-medium-bar").style.width = totalCount ? `${(mediumCount / totalCount) * 100}%` : "0%";
+      document.getElementById("dist-unhealthy-bar").style.width = totalCount ? `${(unhealthyCount / totalCount) * 100}%` : "0%";
+
+      if (totalCount === 0) {
+        avgBadgeEl.textContent = "7-Tage-Ø: Noch keine Mahlzeiten";
+        avgBadgeEl.className = "px-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-semibold text-slate-400";
+      } else {
+        const avgScore = Math.round(allSevenDayMeals.reduce((acc, m) => acc + m.score, 0) / totalCount);
+        if (avgScore >= 70) {
+          avgBadgeEl.textContent = `7-Tage-Ø: 🟢 Gesund (${avgScore}/100 Pkt.)`;
+          avgBadgeEl.className = "px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-xs font-bold text-emerald-300";
+        } else if (avgScore >= 45) {
+          avgBadgeEl.textContent = `7-Tage-Ø: 🟡 Mittel (${avgScore}/100 Pkt.)`;
+          avgBadgeEl.className = "px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs font-bold text-amber-300";
+        } else {
+          avgBadgeEl.textContent = `7-Tage-Ø: 🔴 Ungesund (${avgScore}/100 Pkt.)`;
+          avgBadgeEl.className = "px-3.5 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-xs font-bold text-rose-300";
+        }
+      }
+
+      chartEl.innerHTML = days
+        .map((d) => {
+          if (d.meals.length === 0) {
+            return `
+              <div class="flex flex-col items-center justify-end h-full">
+                <div class="w-full max-w-[32px] bg-slate-900 border border-slate-800 rounded-t-lg h-3"></div>
+                <span class="text-[10px] text-slate-500 mt-1.5">${d.shortDate}</span>
+              </div>
+            `;
+          }
+          const avgDayScore = Math.round(d.meals.reduce((acc, m) => acc + m.score, 0) / d.meals.length);
+          const totalDayKcal = Math.round(d.meals.reduce((acc, m) => acc + (m.totals?.kcal || 0), 0));
+          const barColor =
+            avgDayScore >= 70
+              ? "bg-emerald-500"
+              : avgDayScore >= 45
+              ? "bg-amber-400"
+              : "bg-rose-500";
+          const labelShort = avgDayScore >= 70 ? "Gesund" : avgDayScore >= 45 ? "Mittel" : "Unges.";
+
+          return `
+            <div class="flex flex-col items-center justify-end h-full group relative" title="${d.shortDate}: ${labelShort} (${avgDayScore}/100) · ${totalDayKcal} kcal">
+              <span class="text-[10px] text-slate-400 mb-1 font-mono">${avgDayScore}%</span>
+              <div class="w-full max-w-[32px] ${barColor} rounded-t-lg transition-all" style="height: ${Math.max(12, avgDayScore)}%"></div>
+              <span class="text-[10px] text-slate-300 font-medium mt-1.5">${d.shortDate}</span>
             </div>
           `;
         })
@@ -832,7 +1166,7 @@
         .map(
           (entry) => `
           <div class="flex items-center justify-between bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-sm">
-            <span><strong>${entry.portions}x</strong> ${entry.name}</span>
+            <span><strong>${entry.amount} ${entry.unit}</strong> ${entry.name}</span>
             <button onclick="removeBuilderIngredient('${entry.foodId}')" class="text-xs text-rose-400 hover:underline">Entfernen</button>
           </div>
         `
@@ -843,7 +1177,7 @@
       const rating = evaluateMealHealth(totals);
 
       document.getElementById("meal-rating-badge").className = `text-lg font-bold mt-0.5 ${rating.badgeClass}`;
-      document.getElementById("meal-rating-badge").textContent = rating.label;
+      document.getElementById("meal-rating-badge").textContent = `${rating.label} (${rating.score}/100)`;
       document.getElementById("meal-score-reasons").textContent = rating.reasons;
 
       document.getElementById("sum-kcal").textContent = Math.round(totals.kcal);
@@ -873,7 +1207,9 @@
                 <button onclick="deleteSavedMeal('${m.id}')" class="text-slate-500 hover:text-rose-400 text-xs">✕</button>
               </div>
             </div>
-            <p class="text-xs text-slate-400 mb-2">${m.items.map((i) => `${i.portions}x${i.name}`).join(", ")}</p>
+            <p class="text-xs text-slate-400 mb-2">${m.items
+              .map((i) => `${i.amount !== undefined ? i.amount : i.portions}${i.unit \vert{}\vert{} "x"} ${i.name}`)
+              .join(", ")}</p>
             <div class="text-xs text-slate-500">
               ${Math.round(m.totals.kcal)} kcal · P: ${m.totals.protein.toFixed(1)}g · C: ${m.totals.carbs.toFixed(1)}g (Zucker: ${m.totals.sugar.toFixed(1)}g) · F: ${m.totals.fat.toFixed(1)}g (Ges.: ${m.totals.satFat.toFixed(1)}g) · Ballastst.: ${m.totals.fiber.toFixed(1)}g
             </div>
@@ -900,22 +1236,38 @@
       }
 
       listEl.innerHTML = state.shoppingList
-        .map(
-          (item) => `
-          <div class="flex items-center justify-between bg-slate-950 border border-slate-800 p-3.5 rounded-xl">
-            <div>
-              <div class="font-semibold text-sm">${item.name}</div>
-              <div class="text-xs text-slate-500">Hinzugefügt am ${item.addedAt}</div>
+        .map((item) => {
+          const pantryItem = state.pantry.find((p) => p.id === item.foodId);
+          const packInfo = pantryItem
+            ? `1 Packung/Einheit = +${pantryItem.packSize} ${pantryItem.unit}`
+            : "1 Einheit";
+
+          return `
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-950 border border-slate-800 p-3.5 rounded-xl">
+              <div>
+                <div class="font-semibold text-sm">${item.name}</div>
+                <div class="text-xs text-slate-500">Hinzugefügt am ${item.addedAt} · <span class="text-slate-400">${packInfo}</span></div>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-slate-400">Anzahl:</label>
+                <input
+                  type="number"
+                  id="buy-qty-${item.foodId}"
+                  value="${item.buyCount || 1}"
+                  min="1"
+                  step="1"
+                  class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm font-bold text-center text-slate-100"
+                />
+                <button
+                  onclick="markAsBought('${item.foodId}')"
+                  class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition"
+                >
+                  ✓ Eingekauft
+                </button>
+              </div>
             </div>
-            <button
-              onclick="markAsBought('${item.foodId}')"
-              class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition"
-            >
-              ✓ Eingekauft (Vorrat +1)
-            </button>
-          </div>
-        `
-        )
+          `;
+        })
         .join("");
     }
 
@@ -943,7 +1295,7 @@
             <div class="flex items-center gap-3">
               <button
                 onclick="toggleGymStretchInHistory('${g.id}')"
-                class="text-xs font-mono px-2.5 py-1 rounded border ${
+                class="text-xs font-mono px-2.5 py-1 rounded border whitespace-nowrap ${
                   g.stretched
                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                     : "border-rose-500/40 bg-rose-500/10 text-rose-300"
