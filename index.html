@@ -268,13 +268,33 @@
       </div>
     </section>
 
-    <!-- TAB 3: EINKAUFSLISTE -->
+    <!-- TAB 3: EINKAUFSLISTE (MIT PACKUNGS-ANZAHL & DIREKT-ZUFÜGEN) -->
     <section id="tab-shopping" class="hidden space-y-6">
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <h2 class="text-base font-semibold mb-1">Automatische Einkaufsliste</h2>
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h2 class="text-base font-semibold">🛒 Einkaufsliste & Packungs-Rechner</h2>
+          <span class="text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">Mehrfach-Packungen aktiv</span>
+        </div>
         <p class="text-xs text-slate-400 mb-4">
-          Hier landen Produkte, deren Vorrat auf <strong>0</strong> gefallen ist. Du kannst jetzt vor dem Abhaken die <strong>gekaufte Anzahl an Packungen/Stücken</strong> einstellen.
+          Stelle mit <strong>- / +</strong> oder über das Zahlenfeld ein, wie viele Packungen/Stücke du gekauft hast. Beim Klick auf <em>„Eingekauft“</em> wird automatisch <code class="text-slate-200">Anzahl × Packungsgröße</code> zu deinem Vorrat addiert.
         </p>
+
+        <!-- Schnell-Leiste zum Hinzufügen mit Packungsanzahl -->
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 mb-5">
+          <label class="block text-xs font-semibold text-slate-300 mb-2">Produkt mit Wunsch-Packungsanzahl auf die Einkaufsliste setzen:</label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <select id="shopping-quick-select" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100"></select>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400 shrink-0">Anzahl Packungen:</span>
+              <input type="number" id="shopping-quick-count" value="1" min="1" step="1" class="w-20 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-center text-slate-100" />
+              <button onclick="addQuickToShoppingList()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shrink-0 transition">
+                + Auf die Liste
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Einkaufslisten-Einträge -->
         <div id="shopping-list" class="space-y-2.5"></div>
       </div>
     </section>
@@ -1219,9 +1239,82 @@
         .join("");
     }
 
+    window.addQuickToShoppingList = function() {
+      const selectEl = document.getElementById("shopping-quick-select");
+      const countEl = document.getElementById("shopping-quick-count");
+      if (!selectEl || !countEl) return;
+      const foodId = selectEl.value;
+      const packs = Math.max(1, Number(countEl.value) || 1);
+
+      const item = state.pantry.find((p) => p.id === foodId);
+      if (!item) return;
+
+      const existing = state.shoppingList.find((s) => s.foodId === item.id);
+      if (existing) {
+        existing.buyCount = (Number(existing.buyCount) || 1) + packs;
+      } else {
+        state.shoppingList.push({
+          foodId: item.id,
+          name: item.name,
+          buyCount: packs,
+          addedAt: new Date().toLocaleDateString("de-DE")
+        });
+      }
+      countEl.value = 1;
+      persistState();
+    };
+
+    window.changeShoppingBuyCount = function(foodId, delta) {
+      const entry = state.shoppingList.find((s) => s.foodId === foodId);
+      if (!entry) return;
+      entry.buyCount = Math.max(1, (Number(entry.buyCount) || 1) + delta);
+      persistState();
+    };
+
+    window.setShoppingBuyCount = function(foodId, val) {
+      const entry = state.shoppingList.find((s) => s.foodId === foodId);
+      if (!entry) return;
+      entry.buyCount = Math.max(1, Number(val) || 1);
+      persistState();
+    };
+
+    window.removeShoppingItem = function(foodId) {
+      state.shoppingList = state.shoppingList.filter((s) => s.foodId !== foodId);
+      persistState();
+    };
+
+    window.markAsBought = function(foodId) {
+      const entry = state.shoppingList.find((s) => s.foodId === foodId);
+      const countInput = document.getElementById(`buy-qty-${foodId}`);
+      const boughtPacks = countInput
+        ? Math.max(1, Number(countInput.value) || 1)
+        : Math.max(1, Number(entry?.buyCount) || 1);
+
+      const pantryItem = state.pantry.find((p) => p.id === foodId);
+      if (pantryItem) {
+        const packSize = Number(pantryItem.packSize) || 1;
+        pantryItem.qty = Number((pantryItem.qty + boughtPacks * packSize).toFixed(2));
+      }
+      state.shoppingList = state.shoppingList.filter((s) => s.foodId !== foodId);
+      persistState();
+    };
+
     function renderShoppingList() {
       const listEl = document.getElementById("shopping-list");
       const badgeEl = document.getElementById("shopping-badge");
+      const quickShopSelectEl = document.getElementById("shopping-quick-select");
+
+      if (quickShopSelectEl) {
+        const prevQuick = quickShopSelectEl.value;
+        quickShopSelectEl.innerHTML = state.pantry.length
+          ? state.pantry
+              .map((item) => `<option value="${item.id}">${item.name} (1 Packung = ${item.packSize || 1} ${item.unit || "Stk"})</option>`)
+              .join("")
+          : `<option value="">-- Zuerst Lebensmittel im Vorrat importieren --</option>`;
+        if (prevQuick && state.pantry.some((p) => p.id === prevQuick)) {
+          quickShopSelectEl.value = prevQuick;
+        }
+      }
 
       if (state.shoppingList.length > 0) {
         badgeEl.textContent = state.shoppingList.length;
@@ -1231,39 +1324,63 @@
       }
 
       if (state.shoppingList.length === 0) {
-        listEl.innerHTML = `<p class="text-xs text-slate-500">Deine Einkaufsliste ist leer. Sobald ein Vorrat auf 0 sinkt, kannst du ihn über „Wieder einkaufen?“ hierher schicken.</p>`;
+        listEl.innerHTML = `<p class="text-xs text-slate-500">Aktuell stehen keine offenen Produkte auf der Liste. Sobald ein Vorrat auf 0 sinkt (oder du oben ein Produkt auswählst), erscheint es hier mit Packungs-Zähler.</p>`;
         return;
       }
 
       listEl.innerHTML = state.shoppingList
         .map((item) => {
           const pantryItem = state.pantry.find((p) => p.id === item.foodId);
-          const packInfo = pantryItem
-            ? `1 Packung/Einheit = +${pantryItem.packSize} ${pantryItem.unit}`
-            : "1 Einheit";
+          const count = Math.max(1, Number(item.buyCount) || 1);
+          const packSize = pantryItem ? Number(pantryItem.packSize) || 1 : 1;
+          const unit = pantryItem ? pantryItem.unit || "Stk" : "Stk";
+          const totalAdd = Number((count * packSize).toFixed(2));
 
           return `
-            <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-950 border border-slate-800 p-3.5 rounded-xl">
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-950 border border-slate-800 p-4 rounded-xl">
               <div>
                 <div class="font-semibold text-sm">${item.name}</div>
-                <div class="text-xs text-slate-500">Hinzugefügt am ${item.addedAt} · <span class="text-slate-400">${packInfo}</span></div>
+                <div class="text-xs text-slate-400 mt-0.5">
+                  1 Packung = <strong>${packSize} ${unit}</strong> · Einkauf ergibt: <strong class="text-emerald-400">+${totalAdd} ${unit}</strong>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <label class="text-xs text-slate-400">Anzahl:</label>
-                <input
-                  type="number"
-                  id="buy-qty-${item.foodId}"
-                  value="${item.buyCount || 1}"
-                  min="1"
-                  step="1"
-                  class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm font-bold text-center text-slate-100"
-                />
+
+              <div class="flex flex-wrap items-center gap-2.5">
+                <div class="flex items-center bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onclick="changeShoppingBuyCount('${item.foodId}', -1)"
+                    class="px-3 py-1.5 text-slate-200 hover:bg-slate-800 font-bold text-sm"
+                  >-</button>
+                  <input
+                    type="number"
+                    id="buy-qty-${item.foodId}"
+                    value="${count}"
+                    min="1"
+                    step="1"
+                    onchange="setShoppingBuyCount('${item.foodId}', this.value)"
+                    class="w-14 bg-slate-950 text-center text-xs font-bold text-slate-100 py-1.5 focus:outline-none"
+                  />
+                  <span class="text-[11px] text-slate-400 pr-2 bg-slate-950">Pack.</span>
+                  <button
+                    type="button"
+                    onclick="changeShoppingBuyCount('${item.foodId}', 1)"
+                    class="px-3 py-1.5 text-slate-200 hover:bg-slate-800 font-bold text-sm"
+                  >+</button>
+                </div>
+
                 <button
                   onclick="markAsBought('${item.foodId}')"
-                  class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition"
+                  class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition shadow"
                 >
-                  ✓ Eingekauft
+                  ✓ ${count}x Eingekauft (+${totalAdd} ${unit})
                 </button>
+
+                <button
+                  onclick="removeShoppingItem('${item.foodId}')"
+                  title="Von Einkaufsliste entfernen"
+                  class="text-slate-500 hover:text-rose-400 px-1.5 text-sm"
+                >✕</button>
               </div>
             </div>
           `;
