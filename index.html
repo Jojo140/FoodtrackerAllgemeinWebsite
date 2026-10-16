@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Food & Gym Sync Hub</title>
+  <title>Food & Gym Sync Hub v2.2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .tab-btn.active {
@@ -25,7 +25,7 @@
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600/20 text-blue-400 text-2xl font-bold mb-3">
           🔒
         </div>
-        <h1 class="text-2xl font-bold tracking-tight">Persönlicher Tracker</h1>
+        <h1 class="text-2xl font-bold tracking-tight">Persönlicher Tracker <span class="text-xs bg-blue-600/30 text-blue-300 px-2 py-0.5 rounded-full align-middle">v2.2</span></h1>
         <p class="text-sm text-slate-400 mt-1">Bitte gib dein Passwort ein, um zu entsperren.</p>
       </div>
 
@@ -105,7 +105,10 @@
     <!-- HEADER -->
     <header class="flex flex-wrap items-center justify-between gap-3 mb-6 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
       <div>
-        <h1 class="text-xl font-bold tracking-tight">Food & Gym Hub</h1>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl font-bold tracking-tight">Food & Gym Hub</h1>
+          <span class="text-[11px] bg-blue-600/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-semibold">v2.2</span>
+        </div>
         <div class="flex items-center gap-2 mt-0.5">
           <span id="sync-indicator" class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
           <span id="sync-status-text" class="text-xs text-slate-400">Synchronisiert</span>
@@ -279,7 +282,7 @@
           Stelle mit <strong>- / +</strong> oder über das Zahlenfeld ein, wie viele Packungen/Stücke du gekauft hast. Beim Klick auf <em>„Eingekauft“</em> wird automatisch <code class="text-slate-200">Anzahl × Packungsgröße</code> zu deinem Vorrat addiert.
         </p>
 
-        <!-- Schnell-Leiste zum Hinzufügen mit Packungsanzahl -->
+        <!-- Immer sichtbare Schnell-Leiste zum Hinzufügen mit Packungsanzahl -->
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 mb-5">
           <label class="block text-xs font-semibold text-slate-300 mb-2">Produkt mit Wunsch-Packungsanzahl auf die Einkaufsliste setzen:</label>
           <div class="flex flex-col sm:flex-row gap-2">
@@ -321,7 +324,7 @@
             />
           </div>
 
-          <!-- Interactive Yes / No Cross Field for Post-Stretching (FIXED ALIGNMENT) -->
+          <!-- Interactive Yes / No Cross Field for Post-Stretching -->
           <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
             <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
               Post-Stretching gemacht?
@@ -376,7 +379,7 @@
     import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // ============================================================================
-    // 1. FIREBASE KONFIGURATION
+    // 1. FIREBASE KONFIGURATION (HIER DEINE ECHTEN DATEN EINTRAGEN)
     // ============================================================================
     const firebaseConfig = {
       apiKey: "AIzaSyCGEtLAkxtHTrgo9x2JB8aDCScWmMzJ1ac",
@@ -502,7 +505,7 @@
           const data = snap.data();
           state = {
             pantry: normalizePantryItems(data.pantry),
-            shoppingList: data.shoppingList || [],
+            shoppingList: (data.shoppingList || []).map((s) => ({ ...s, buyCount: Number(s.buyCount) || 1 })),
             savedMeals: data.savedMeals || [],
             gymLogs: data.gymLogs || []
           };
@@ -528,7 +531,7 @@
           const parsed = JSON.parse(raw);
           state = {
             pantry: normalizePantryItems(parsed.pantry),
-            shoppingList: parsed.shoppingList || [],
+            shoppingList: (parsed.shoppingList || []).map((s) => ({ ...s, buyCount: Number(s.buyCount) || 1 })),
             savedMeals: parsed.savedMeals || [],
             gymLogs: parsed.gymLogs || []
           };
@@ -574,7 +577,6 @@
           }
         }
 
-        // Wenn im Code noch keine Einheit ("unit": "g" oder "Stk") definiert wurde -> Rückfrage-Modal öffnen!
         if (!item.unit) {
           pendingImportItem = item;
           openUnitModal(item);
@@ -697,15 +699,44 @@
     window.sendToShoppingList = function(id) {
       const item = state.pantry.find((p) => p.id === id);
       if (!item) return;
-      const alreadyOnList = state.shoppingList.some((s) => s.foodId === item.id);
-      if (!alreadyOnList) {
+      const packInput = document.getElementById(`rebuy-packs-${id}`);
+      const desiredPacks = packInput ? Math.max(1, Number(packInput.value) || 1) : 1;
+
+      const existing = state.shoppingList.find((s) => s.foodId === item.id);
+      if (existing) {
+        existing.buyCount = desiredPacks;
+      } else {
         state.shoppingList.push({
           foodId: item.id,
           name: item.name,
-          buyCount: 1,
+          buyCount: desiredPacks,
           addedAt: new Date().toLocaleDateString("de-DE")
         });
       }
+      persistState();
+    };
+
+    window.addQuickToShoppingList = function() {
+      const selectEl = document.getElementById("shopping-quick-select");
+      const countEl = document.getElementById("shopping-quick-count");
+      const foodId = selectEl.value;
+      const packs = Math.max(1, Number(countEl.value) || 1);
+
+      const item = state.pantry.find((p) => p.id === foodId);
+      if (!item) return;
+
+      const existing = state.shoppingList.find((s) => s.foodId === item.id);
+      if (existing) {
+        existing.buyCount = Number(existing.buyCount || 1) + packs;
+      } else {
+        state.shoppingList.push({
+          foodId: item.id,
+          name: item.name,
+          buyCount: packs,
+          addedAt: new Date().toLocaleDateString("de-DE")
+        });
+      }
+      countEl.value = 1;
       persistState();
     };
 
@@ -716,11 +747,33 @@
     };
 
     // ============================================================================
-    // 5. EINKAUFSLISTE MIT FREIER ANZAHL GEKAUFTER PACKUNGEN
+    // 5. EINKAUFSLISTE MIT INTERAKTIVER PACKUNGS-ANZAHL (- / + / INPUT)
     // ============================================================================
+    window.changeShoppingBuyCount = function(foodId, delta) {
+      const entry = state.shoppingList.find((s) => s.foodId === foodId);
+      if (!entry) return;
+      entry.buyCount = Math.max(1, (Number(entry.buyCount) || 1) + delta);
+      persistState();
+    };
+
+    window.setShoppingBuyCount = function(foodId, val) {
+      const entry = state.shoppingList.find((s) => s.foodId === foodId);
+      if (!entry) return;
+      entry.buyCount = Math.max(1, Number(val) || 1);
+      persistState();
+    };
+
+    window.removeShoppingItem = function(foodId) {
+      state.shoppingList = state.shoppingList.filter((s) => s.foodId !== foodId);
+      persistState();
+    };
+
     window.markAsBought = function(foodId) {
+      const entry = state.shoppingList.find((s) => s.foodId === foodId);
       const countInput = document.getElementById(`buy-qty-${foodId}`);
-      const boughtPacks = countInput ? Math.max(1, Number(countInput.value) || 1) : 1;
+      const boughtPacks = countInput
+        ? Math.max(1, Number(countInput.value) || 1)
+        : Math.max(1, Number(entry?.buyCount) || 1);
 
       const pantryItem = state.pantry.find((p) => p.id === foodId);
       if (pantryItem) {
@@ -943,7 +996,7 @@
     };
 
     // ============================================================================
-    // 7. GYM TRACKER (FIXED POST-STRETCHING BUTTONS)
+    // 7. GYM TRACKER
     // ============================================================================
     window.selectStretch = function(val) {
       selectedStretchValue = val;
@@ -991,7 +1044,7 @@
     };
 
     // ============================================================================
-    // 8. RENDERING ALLER TABS & DES 7-TAGE-GRAPHEN
+    // 8. RENDERING ALLER TABS
     // ============================================================================
     function renderAll() {
       renderPantry();
@@ -1005,11 +1058,16 @@
     function renderPantry() {
       const listEl = document.getElementById("pantry-list");
       const selectEl = document.getElementById("meal-food-select");
+      const quickShopSelectEl = document.getElementById("shopping-quick-select");
       const prevSelected = selectEl.value;
+      const prevQuickSelected = quickShopSelectEl ? quickShopSelectEl.value : "";
 
       if (state.pantry.length === 0) {
         listEl.innerHTML = `<p class="text-xs text-slate-500">Noch keine Lebensmittel vorhanden. Füge oben einen Gemini-Code ein.</p>`;
         selectEl.innerHTML = `<option value="">-- Zuerst Lebensmittel im Vorrat importieren --</option>`;
+        if (quickShopSelectEl) {
+          quickShopSelectEl.innerHTML = `<option value="">-- Zuerst Lebensmittel im Vorrat importieren --</option>`;
+        }
         return;
       }
 
@@ -1020,6 +1078,15 @@
         })
         .join("");
 
+      if (quickShopSelectEl) {
+        quickShopSelectEl.innerHTML = state.pantry
+          .map((item) => `<option value="${item.id}">${item.name} (1 Packung = ${item.packSize} ${item.unit})</option>`)
+          .join("");
+        if (prevQuickSelected && state.pantry.some((p) => p.id === prevQuickSelected)) {
+          quickShopSelectEl.value = prevQuickSelected;
+        }
+      }
+
       if (prevSelected && state.pantry.some((p) => p.id === prevSelected)) {
         selectEl.value = prevSelected;
       }
@@ -1028,7 +1095,7 @@
       listEl.innerHTML = state.pantry
         .map((item) => {
           const isZero = item.qty <= 0;
-          const alreadyOnShopping = state.shoppingList.some((s) => s.foodId === item.id);
+          const shoppingEntry = state.shoppingList.find((s) => s.foodId === item.id);
           const defaultStep = item.unit === "g" ? 50 : 1;
           const baseInfo = item.unit === "g" ? `pro ${item.base}g` : `pro Stück/Packung`;
 
@@ -1045,14 +1112,25 @@
                 </div>
               </div>
 
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 ${
                   isZero
-                    ? alreadyOnShopping
-                      ? `<span class="text-xs bg-slate-800 text-slate-400 px-3 py-1.5 rounded-lg border border-slate-700">✓ Auf Einkaufsliste</span>`
-                      : `<button onclick="sendToShoppingList('${item.id}')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg transition shadow">
-                          🛒 Wieder einkaufen?
-                        </button>`
+                    ? shoppingEntry
+                      ? `<span class="text-xs bg-slate-800 text-emerald-300 px-3 py-1.5 rounded-lg border border-emerald-500/30">✓ Auf Einkaufsliste (${shoppingEntry.buyCount || 1} Pack.)</span>`
+                      : `<div class="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/40 p-1 rounded-xl">
+                          <input
+                            type="number"
+                            id="rebuy-packs-${item.id}"
+                            value="1"
+                            min="1"
+                            step="1"
+                            class="w-12 bg-slate-900 border border-slate-700 rounded-lg py-1 text-center text-xs font-bold text-slate-100"
+                            title="Wie viele Packungen nachkaufen?"
+                          />
+                          <button onclick="sendToShoppingList('${item.id}')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg transition shadow">
+                            🛒 Wieder einkaufen?
+                          </button>
+                        </div>`
                     : ""
                 }
 
@@ -1239,82 +1317,9 @@
         .join("");
     }
 
-    window.addQuickToShoppingList = function() {
-      const selectEl = document.getElementById("shopping-quick-select");
-      const countEl = document.getElementById("shopping-quick-count");
-      if (!selectEl || !countEl) return;
-      const foodId = selectEl.value;
-      const packs = Math.max(1, Number(countEl.value) || 1);
-
-      const item = state.pantry.find((p) => p.id === foodId);
-      if (!item) return;
-
-      const existing = state.shoppingList.find((s) => s.foodId === item.id);
-      if (existing) {
-        existing.buyCount = (Number(existing.buyCount) || 1) + packs;
-      } else {
-        state.shoppingList.push({
-          foodId: item.id,
-          name: item.name,
-          buyCount: packs,
-          addedAt: new Date().toLocaleDateString("de-DE")
-        });
-      }
-      countEl.value = 1;
-      persistState();
-    };
-
-    window.changeShoppingBuyCount = function(foodId, delta) {
-      const entry = state.shoppingList.find((s) => s.foodId === foodId);
-      if (!entry) return;
-      entry.buyCount = Math.max(1, (Number(entry.buyCount) || 1) + delta);
-      persistState();
-    };
-
-    window.setShoppingBuyCount = function(foodId, val) {
-      const entry = state.shoppingList.find((s) => s.foodId === foodId);
-      if (!entry) return;
-      entry.buyCount = Math.max(1, Number(val) || 1);
-      persistState();
-    };
-
-    window.removeShoppingItem = function(foodId) {
-      state.shoppingList = state.shoppingList.filter((s) => s.foodId !== foodId);
-      persistState();
-    };
-
-    window.markAsBought = function(foodId) {
-      const entry = state.shoppingList.find((s) => s.foodId === foodId);
-      const countInput = document.getElementById(`buy-qty-${foodId}`);
-      const boughtPacks = countInput
-        ? Math.max(1, Number(countInput.value) || 1)
-        : Math.max(1, Number(entry?.buyCount) || 1);
-
-      const pantryItem = state.pantry.find((p) => p.id === foodId);
-      if (pantryItem) {
-        const packSize = Number(pantryItem.packSize) || 1;
-        pantryItem.qty = Number((pantryItem.qty + boughtPacks * packSize).toFixed(2));
-      }
-      state.shoppingList = state.shoppingList.filter((s) => s.foodId !== foodId);
-      persistState();
-    };
-
     function renderShoppingList() {
       const listEl = document.getElementById("shopping-list");
       const badgeEl = document.getElementById("shopping-badge");
-      const quickShopSelectEl = document.getElementById("shopping-quick-select");
-
-      if (quickShopSelectEl) {
-        const prevQuick = quickShopSelectEl.value;
-        quickShopSelectEl.innerHTML = state.pantry.length
-          ? state.pantry
-              .map((item) => `<option value="${item.id}">${item.name} (1 Packung = ${item.packSize || 1} ${item.unit || "Stk"})</option>`)
-              .join("")
-          : `<option value="">-- Zuerst Lebensmittel im Vorrat importieren --</option>`;
-        if (prevQuick && state.pantry.some((p) => p.id === prevQuick)) {
-          quickShopSelectEl.value = prevQuick;
-        }
-      }
 
       if (state.shoppingList.length > 0) {
         badgeEl.textContent = state.shoppingList.length;
@@ -1346,6 +1351,7 @@
               </div>
 
               <div class="flex flex-wrap items-center gap-2.5">
+                <!-- Interaktiver Packungs-Wähler (- / Anzahl / +) -->
                 <div class="flex items-center bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
                   <button
                     type="button"
@@ -1428,7 +1434,6 @@
         .join("");
     }
 
-    // Initialisiere Kreuzchen-Feld beim Start
     selectStretch(true);
   </script>
 </body>
